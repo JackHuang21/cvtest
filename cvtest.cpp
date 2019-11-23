@@ -33,31 +33,41 @@ int	main(int argc, char* argv[])
 		return EXIT_FAILURE;
 	}
 
-	Point2f srcTri[3];
-	srcTri[0] = Point2f(0.f, 0.f);
-	srcTri[1] = Point2f(src.cols - 1.f, 0.f);
-	srcTri[2] = Point2f(0.f, src.rows - 1.f);
-
-	Point2f dstTri[3];
-	dstTri[0] = Point2f(0.f, src.rows * 0.33f);
-	dstTri[1] = Point2f(src.cols * 0.85f, src.rows * 0.25f);
-	dstTri[2] = Point2f(src.cols * 0.15f, src.rows * 0.7f);
-
-	Mat warpMat = getAffineTransform(srcTri, dstTri);
-	Mat dst = Mat::zeros(src.rows, src.cols, src.type());
-	warpAffine(src, dst, warpMat, dst.size());
+	std::vector<Mat> bgrPlanes;
+	split(src, bgrPlanes);
 	
-	Point center = Point(src.cols / 2, src.rows / 2);
-	double angle = -50.0;
-	double scale = 1;
+	int histSize = 256;
+	float range[] = { 0, 256 };
+	const float* histRange = range;
+	bool uniform = true;
+	bool accumulate = false;
+	Mat bHist, gHist, rHist;
+	calcHist(&bgrPlanes[0], 1, 0, Mat(), bHist, 1, &histSize, &histRange, uniform, accumulate);
+	calcHist(&bgrPlanes[1], 1, 0, Mat(), gHist, 1, &histSize, &histRange, uniform, accumulate);
+	calcHist(&bgrPlanes[2], 1, 0, Mat(), rHist, 1, &histSize, &histRange, uniform, accumulate);
+	
+	int histW = 512;
+	int histH = 512;
+	int binW = cvRound((double)histW / histSize);
+	Mat histImage(histW, histH, CV_8UC3, Scalar(0, 0, 0));
 
-	Mat rotMat = getRotationMatrix2D(center, angle, scale);
-	Mat rotDst;
-	warpAffine(dst, rotDst, rotMat, dst.size());
+	normalize(bHist, bHist, 0, histImage.rows, NORM_MINMAX, -1, Mat());
+	normalize(gHist, gHist, 0, histImage.rows, NORM_MINMAX, -1, Mat());
+	normalize(rHist, rHist, 0, histImage.rows, NORM_MINMAX, -1, Mat());
+
+	for (int i = 1; i < histSize; i++)
+	{
+		line(histImage, Point(binW * (i - 1), histH - cvRound(bHist.at<float>(i - 1))), 
+			Point(binW * i, histH - cvRound(bHist.at<float>(i))), Scalar(255, 0, 0));
+		line(histImage, Point(binW * (i - 1), histH - cvRound(gHist.at<float>(i - 1))),
+			Point(binW * i, histH - cvRound(gHist.at<float>(i))), Scalar(0, 255, 0));
+		line(histImage, Point(binW * (i - 1), histH - cvRound(rHist.at<float>(i - 1))),
+			Point(binW * i, histH - cvRound(rHist.at<float>(i))), Scalar(0, 0, 255));
+	}
+
 
 	imshow("src", src);
-	imshow("warp", dst);
-	imshow("warp and rotate", rotDst);
+	imshow("hist", histImage);
 	waitKey(0);
 	return EXIT_SUCCESS;
 }
