@@ -16,13 +16,10 @@
 
 using namespace cv;
 
-static void updateMap(int& ind, Mat& mapX, Mat& mapY);
-
 
 int	main(int argc, char* argv[])
 {
 	std::string imgName = "images/lena.jpg";
-	std::string winName = "remap demo";
 	std::cout << "\t remap demo" << std::endl;
 	std::cout << "1. reduce the image to half size and will display it in the middle..." << std::endl;
 	std::cout << "2. turn the image upside down..." << std::endl;
@@ -35,61 +32,33 @@ int	main(int argc, char* argv[])
 		std::cout << "can't load the image..." << std::endl;
 		return EXIT_FAILURE;
 	}
-	Mat dst(src.size(), src.type());
-	Mat mapX(src.size(), CV_32FC1);
-	Mat mapY(src.size(), CV_32FC1);
+
+	Point2f srcTri[3];
+	srcTri[0] = Point2f(0.f, 0.f);
+	srcTri[1] = Point2f(src.cols - 1.f, 0.f);
+	srcTri[2] = Point2f(0.f, src.rows - 1.f);
+
+	Point2f dstTri[3];
+	dstTri[0] = Point2f(0.f, src.rows * 0.33f);
+	dstTri[1] = Point2f(src.cols * 0.85f, src.rows * 0.25f);
+	dstTri[2] = Point2f(src.cols * 0.15f, src.rows * 0.7f);
+
+	Mat warpMat = getAffineTransform(srcTri, dstTri);
+	Mat dst = Mat::zeros(src.rows, src.cols, src.type());
+	warpAffine(src, dst, warpMat, dst.size());
 	
-	namedWindow(winName, WINDOW_AUTOSIZE);
-	int ind = 0;
-	while (1)
-	{
-		updateMap(ind, mapX, mapY);
-		remap(src, dst, mapX, mapY, INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
-		imshow(winName, dst);
-		char c = waitKey(1000);
-		if (c == 27) break;
-	}
+	Point center = Point(src.cols / 2, src.rows / 2);
+	double angle = -50.0;
+	double scale = 1;
+
+	Mat rotMat = getRotationMatrix2D(center, angle, scale);
+	Mat rotDst;
+	warpAffine(dst, rotDst, rotMat, dst.size());
+
+	imshow("src", src);
+	imshow("warp", dst);
+	imshow("warp and rotate", rotDst);
 	waitKey(0);
 	return EXIT_SUCCESS;
 }
 
-void updateMap(int& ind, Mat& mapX, Mat& mapY)
-{
-	for (int i = 0; i < mapX.rows; i++)
-	{
-		for (int j = 0; j < mapX.cols; j++)
-		{
-			switch (ind)
-			{
-			case 0:
-				if (j > mapX.cols * 0.25 && j < mapX.cols * 0.75 &&
-					i > mapX.rows * 0.25 && i < mapX.rows * 0.75)
-				{
-					mapX.at<float>(i, j) = 2 * (j - mapX.cols * 0.25) + 0.5f;
-					mapY.at<float>(i, j) = 2 * (i - mapX.cols * 0.25) + 0.5f;
-				}
-				else
-				{
-					mapX.at<float>(i, j) = 0;
-					mapY.at<float>(i, j) = 0;
-				}
-				break;
-			case 1:
-				mapX.at<float>(i, j) = (float)j;
-				mapY.at<float>(i, j) = (float)(mapX.rows - i);
-				break;
-			case 2:
-				mapX.at<float>(i, j) = (float)(mapX.cols - j);
-				mapY.at<float>(i, j) = (float)i;
-				break;
-			case 3:
-				mapX.at<float>(i, j) = (float)(mapX.cols - j);
-				mapY.at<float>(i, j) = (float)(mapX.rows - i);
-				break;
-			default:
-				break;
-			}
-		}
-	}
-	// ind = (ind + 1) % 4;
-}
