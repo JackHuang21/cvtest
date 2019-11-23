@@ -16,27 +16,80 @@
 
 using namespace cv;
 
+static void updateMap(int& ind, Mat& mapX, Mat& mapY);
 
-int main(int argc, char* argv[])
+
+int	main(int argc, char* argv[])
 {
-	std::string imageName = "images/circle.png";
-	Mat src = imread(samples::findFile(imageName), IMREAD_COLOR);
-	Mat dst;
-	cvtColor(src, dst, COLOR_BGR2GRAY);
-	// median blur 
-	medianBlur(dst, dst, 3);
-	std::vector<Vec3f> circles;
-	HoughCircles(dst, circles, HOUGH_GRADIENT, 1, dst.rows / 16, 100, 30, 1, 30);
-	for (size_t i = 0; i < circles.size(); i++)
+	std::string imgName = "images/lena.jpg";
+	std::string winName = "remap demo";
+	std::cout << "\t remap demo" << std::endl;
+	std::cout << "1. reduce the image to half size and will display it in the middle..." << std::endl;
+	std::cout << "2. turn the image upside down..." << std::endl;
+	std::cout << "3. reflect the iamge left to right..." << std::endl;
+	std::cout << "4. cobination 2 & 3..." << std::endl;
+
+	Mat src = imread(imgName, IMREAD_COLOR);
+	if (src.empty())
 	{
-		Vec3i c = circles[i];
-		Point center = Point(c[0], c[1]);
-		circle(src, center, 1, Scalar(0, 100, 100), 1, LINE_AA);
-		int radius = c[2];
-		circle(src, center, radius, Scalar(255, 0, 255), 1, LINE_AA);
+		std::cout << "can't load the image..." << std::endl;
+		return EXIT_FAILURE;
 	}
-	imshow("dst", src);
+	Mat dst(src.size(), src.type());
+	Mat mapX(src.size(), CV_32FC1);
+	Mat mapY(src.size(), CV_32FC1);
+	
+	namedWindow(winName, WINDOW_AUTOSIZE);
+	int ind = 0;
+	while (1)
+	{
+		updateMap(ind, mapX, mapY);
+		remap(src, dst, mapX, mapY, INTER_LINEAR, BORDER_CONSTANT, Scalar(0, 0, 0));
+		imshow(winName, dst);
+		char c = waitKey(1000);
+		if (c == 27) break;
+	}
 	waitKey(0);
 	return EXIT_SUCCESS;
 }
 
+void updateMap(int& ind, Mat& mapX, Mat& mapY)
+{
+	for (int i = 0; i < mapX.rows; i++)
+	{
+		for (int j = 0; j < mapX.cols; j++)
+		{
+			switch (ind)
+			{
+			case 0:
+				if (j > mapX.cols * 0.25 && j < mapX.cols * 0.75 &&
+					i > mapX.rows * 0.25 && i < mapX.rows * 0.75)
+				{
+					mapX.at<float>(i, j) = 2 * (j - mapX.cols * 0.25) + 0.5f;
+					mapY.at<float>(i, j) = 2 * (i - mapX.cols * 0.25) + 0.5f;
+				}
+				else
+				{
+					mapX.at<float>(i, j) = 0;
+					mapY.at<float>(i, j) = 0;
+				}
+				break;
+			case 1:
+				mapX.at<float>(i, j) = (float)j;
+				mapY.at<float>(i, j) = (float)(mapX.rows - i);
+				break;
+			case 2:
+				mapX.at<float>(i, j) = (float)(mapX.cols - j);
+				mapY.at<float>(i, j) = (float)i;
+				break;
+			case 3:
+				mapX.at<float>(i, j) = (float)(mapX.cols - j);
+				mapY.at<float>(i, j) = (float)(mapX.rows - i);
+				break;
+			default:
+				break;
+			}
+		}
+	}
+	// ind = (ind + 1) % 4;
+}
