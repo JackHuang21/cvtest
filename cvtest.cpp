@@ -1,92 +1,89 @@
-#include <opencv2/core.hpp>
-#include <opencv2/core/utility.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 #include <iostream>
-#include <sstream>
 
-using namespace std;
-using namespace cv;
-
-static void help()
+static void help(char* progName)
 {
-    cout << "-----------------------------------------------" << endl;
-    cout << "This program shows how to create matrices(cv::Mat)";
-    cout << " in OpenCVand its serial";
-    cout << " out capabilities." << endl;
-    cout << "That is, cv::Mat M(...); M.create and cout << M. " << endl;
-    cout << "Shows how output can be formatted to OpenCV, python, numpy," << endl;
-    cout << " csv and C styles." << endl;
-    cout << "Usage:" << endl;
-    cout << "./mat_the_basic_image_container" << endl;
-    cout << "-----------------------------------------------" << endl;
+    std::cout << std::endl;
+    std::cout << "this program shows how to filter images with mask: " << std::endl;
+    std::cout << "1. the write it yourself" << std::endl;
+    std::cout << "2. filter2d way" << std::endl;
+    std::cout << "usage:" << progName << " [image_path -- default lena.jpg] [G -- grayscale]" << std::endl;     
 }
 
+void Sharpen(const cv::Mat& img, cv::Mat& result);
 
-int main(int, char**)
+int main(int argc, char* argv[])
 {
-    help();
+    help(argv[0]);
+    const char* filename = argc >= 2 ? argv[1] : "C:\\Users\\q9947\\Documents\\source\\repo\\cvtest\\images\\lena.jpg";
+    cv::Mat src;
+    cv::Mat dst0;
+    cv::Mat dst1;
 
-    // create by using constructor
-    Mat M(2, 2, CV_8UC3, Scalar(0, 0, 255));
-    cout << "M = " << endl << M << endl << endl;
+    if (argc >= 3 && !strcmp("G", argv[2]))
+        src = cv::imread(cv::samples::findFile(filename), cv::IMREAD_GRAYSCALE);
+    else
+        src = cv::imread(cv::samples::findFile(filename), cv::IMREAD_COLOR);
 
-    // create by using the create function
-    M.create(4, 4, CV_8UC(2));
-    cout << "M = " << endl << M << endl;
+    if (src.empty())
+    {
+        std::cerr << "can't open image [" << filename << "]" << std::endl;
+        return EXIT_FAILURE;
+    }
 
-    // create multidimensional matrices
-    int sz[3] = { 2, 2, 3 };
-    Mat L(3, sz, CV_8UC1(1), Scalar::all(0));
+    cv::namedWindow("input", cv::WINDOW_AUTOSIZE);
+    cv::namedWindow("output", cv::WINDOW_AUTOSIZE);
 
-    // create using matlab style eye, ones, zero matrix
-    Mat E = Mat::eye(4, 4, CV_64F);
-    cout << "E = " << endl << E << endl;
-    Mat O = Mat::ones(2, 2, CV_32F);
-    cout << "O = " << endl << O << endl;
-    Mat Z = Mat::zeros(3, 3, CV_8UC1);
-    cout << "Z = " << endl << Z << endl;
-
-    // create a 3x3 double-precision identity matrix 
-    Mat C = (Mat_<double>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
-    cout << "C = " << endl << C << endl;
+    cv::imshow("input", src);
+    double t = (double)cv::getTickCount();
     
-    // do the same with initializer_list
-#ifdef CV_CXX11
-    C = (Mat_<double>({ 0, -1, 0, -1, 5, -1, 0, -1, 0 })).reshape(3);
-    cout << "C = " << endl << C << endl;
-#endif
-
-    Mat RowClone = C.row(1).clone();
-    cout << "RowClone = " << endl << RowClone << endl;
-
-    // fill a matrix with random values
-    Mat R = Mat(3, 2, CV_8UC3);
-    randu(R, Scalar::all(0), Scalar::all(255));
-
-    // Demonstrate the output formating options
-    cout << "R (default)" << endl << R << endl;
-    cout << "R (python)" << endl << format(R, Formatter::FMT_PYTHON) << endl;
-    cout << "R (numpy)" << endl << format(R, Formatter::FMT_NUMPY) << endl;
-    cout << "R (csv)" << endl << format(R, Formatter::FMT_CSV) << endl;
-    cout << "R (c)" << endl << format(R, Formatter::FMT_C) << endl;
-
-    Point2f P(5, 1);
-    cout << "Point (2D) = " << P << endl;
+    Sharpen(src, dst0);
     
-    Point3f P3f(2, 6, 7);
-    cout << "Point (3D) = " << P3f << endl;
+    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+    std::cout << "hand write function time passed in seconds: " << t << std::endl;
+    
+    cv::imshow("output", dst0);
+    cv::waitKey();
+    cv::Mat kernel = (cv::Mat_<char>(3, 3) << 0, -1, 0,
+                                            -1, 5, -1,
+                                            0, -1, 0);
+    t = (double)cv::getTickCount();
+    filter2D(src, dst1, src.depth(), kernel);
+    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+    std::cout << "built-in filter 2D time passed in seconds: " << t << std::endl;
 
-    vector<float> v;
-    v.push_back((float)CV_PI);
-    v.push_back(2);
-    v.push_back(3.01f);
-    cout << "Vector of floats via Mat = " << Mat(v) << endl;
+    cv::imshow("output", dst1);
+    cv::waitKey();
 
-    return 0;
+    return EXIT_SUCCESS;
 }
 
+void Sharpen(const cv::Mat& img, cv::Mat& result)
+{
+    CV_Assert(img.depth() == CV_8U);
 
+    const int nChannels = img.channels();
+    result.create(img.size(), img.type());
 
+    for (int i = 1; i < img.rows - 1; i++)
+    {
+        const uchar* previous = img.ptr<uchar>(i - 1);  // 上一行数据
+        const uchar* current = img.ptr<uchar>(i);       // 当前行数据
+        const uchar* next = img.ptr<uchar>(i + 1);      // 下一行数据
 
+        uchar* output = result.ptr<uchar>(i);
 
+        for (int j = nChannels; j < nChannels * (img.cols - 1); j++)
+        {
+            *output++ = cv::saturate_cast<uchar>(5 * current[j] -
+                current[j - nChannels] - current[j + nChannels] - previous[j] - next[j]);
+        }
+    }
+
+    result.row(0).setTo(cv::Scalar(0));
+    result.row(result.rows - 1).setTo(cv::Scalar(0));
+    result.col(0).setTo(cv::Scalar(0));
+    result.col(result.cols - 1).setTo(cv::Scalar(0));
+}
